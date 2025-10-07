@@ -1,18 +1,10 @@
-#[derive(Clone)]
+use strum_macros::{Display, EnumIter, EnumString};
+
+#[derive(Clone, EnumString, EnumIter, Display)]
 pub enum LayerType {
     Hills,
     Water,
     Mountain,
-}
-
-impl LayerType {
-    pub fn to_string(&self) -> String {
-        match &self {
-            LayerType::Hills => "Hills".to_string(),
-            LayerType::Water => "Water".to_string(),
-            LayerType::Mountain => "Mountain".to_string(),
-        }
-    }
 }
 
 #[derive(Clone)]

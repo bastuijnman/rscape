@@ -1,12 +1,18 @@
+use std::str::FromStr;
+
 use bevy::prelude::*;
 
-use crate::{layer::LayerSettingField, ui::settings::SettingChanged};
+use crate::{
+    layer::{LayerSettingField, LayerType},
+    ui::settings::SettingChanged,
+};
 
 #[derive(Component)]
 pub struct Dropdown {
     pub field: LayerSettingField,
     pub options: Vec<String>,
     pub value: String,
+    pub label: String,
 }
 
 #[derive(Component)]
@@ -47,9 +53,9 @@ fn register_dropdown(mut commands: Commands, query: Query<(Entity, &Dropdown), A
                         .observe(
                             move |mut trigger: On<Pointer<Click>>, mut commands: Commands| {
                                 trigger.propagate(false);
-                                commands.trigger(SettingChanged::<String> {
+                                commands.trigger(SettingChanged::<LayerType> {
                                     field: LayerSettingField::LayerType,
-                                    value: option.clone(),
+                                    value: LayerType::from_str(option.as_str()).unwrap(),
                                 });
                                 commands.entity(portal).despawn();
                             },
@@ -62,6 +68,7 @@ fn register_dropdown(mut commands: Commands, query: Query<(Entity, &Dropdown), A
 
 pub fn dropdown(component: Dropdown) -> impl Bundle {
     let value = component.value.clone();
+    let label = component.label.clone();
     (
         Node {
             flex_direction: FlexDirection::Column,
@@ -71,7 +78,7 @@ pub fn dropdown(component: Dropdown) -> impl Bundle {
         children![
             (
                 Node { ..default() },
-                Text::new("Field Title"),
+                Text::new(label),
                 TextFont::default().with_font_size(12.0),
             ),
             (

@@ -1,8 +1,10 @@
 use crate::{
-    layer::{Layer, LayerSettingField},
+    layer::{Layer, LayerSettingField, LayerType},
     ui::dropdown::{Dropdown, dropdown},
 };
+
 use bevy::prelude::*;
+use strum::IntoEnumIterator;
 
 #[derive(Event)]
 pub struct SettingChanged<T> {
@@ -17,13 +19,14 @@ pub fn settings(layer: Layer) -> impl Bundle {
 }
 
 fn hills_settings(layer: Layer) -> impl Bundle {
-    let type_options: Vec<String> = vec!["Hills".to_string(), "Mountains".to_string()];
+    let type_options = LayerType::iter().map(|lt| lt.to_string()).collect();
     (
         Node { ..default() },
         children![dropdown(Dropdown {
             field: LayerSettingField::LayerType,
             options: type_options,
-            value: layer.layer_type.to_string()
+            value: layer.layer_type.to_string(),
+            label: "Layer Type:".to_string(),
         })],
     )
 }
