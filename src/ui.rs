@@ -1,131 +1,93 @@
 use bevy::prelude::*;
+use bevy_egui::{
+    EguiContexts,
+    egui::{self},
+};
+use std::str::FromStr;
+use strum::IntoEnumIterator;
 
 use crate::{
-    ActiveLayers, HMImageHandle, SelectedLayer,
-    ui::{
-        dropdown::DropdownUiPlugin,
-        layer::layer,
-        panel::{PanelProperties, panel},
-        settings::{SettingChanged, settings},
-    },
+    ActiveLayers,
+    layer::{AddLayer, LayerType, settings::LayerSettings},
+    ui::{mountain::mountain_settings, simple_erosion::simple_erosion},
 };
 
-pub mod dropdown;
-pub mod layer;
-pub mod panel;
-pub mod settings;
+mod clamp;
+mod mountain;
+mod simple_erosion;
 
-pub struct UIPlugin;
-impl Plugin for UIPlugin {
-    fn build(&self, app: &mut App) {
-        app.add_plugins(DropdownUiPlugin)
-            .add_systems(Startup, ui)
-            .add_systems(
-                Update,
-                render_layers_panel.run_if(
-                    resource_changed::<ActiveLayers>
-                        .or(resource_exists_and_changed::<SelectedLayer>),
-                ),
-            )
-            .add_systems(Update, render_preview_panel);
-    }
-}
+pub fn ui(mut contexts: EguiContexts, mut layers: ResMut<ActiveLayers>, mut commands: Commands) {
+    egui::Window::new("Layers").show(contexts.ctx_mut().unwrap(), |ui| {
+        // Layer groups
+        for (index, layer) in layers.0.clone().iter_mut().enumerate() {
+            ui.push_id(index, |ui| {
+                ui.collapsing(layer.layer_type.to_string(), |ui| {
+                    // Select layer type
+                    let mut layer_type_value = layer.layer_type.to_string();
+                    egui::ComboBox::from_label("Select Type")
+                        .selected_text(layer.layer_type.to_string())
+                        .show_ui(ui, |ui| {
+                            for i in LayerType::iter() {
+                                ui.selectable_value(
+                                    &mut layer_type_value,
+                                    i.to_string(),
+                                    i.to_string(),
+                                );
+                            }
+                        });
 
-#[derive(Component)]
-struct LayersPanel;
+                    if layer_type_value != layer.layer_type.to_string() {
+                        layer.layer_type = LayerType::from_str(layer_type_value.as_str()).unwrap();
+                        layer.settings = LayerSettings::from_layer_type(layer.layer_type.clone());
+                        layers.0[index] = layer.clone();
+                    }
 
-#[derive(Component)]
-struct PreviewPanel;
+                    // Set seed
+                    let mut seed_value = layer.seed.to_string();
+                    ui.label("Seed:");
+                    let seed = ui.add(egui::TextEdit::singleline(&mut seed_value));
+                    if seed.changed() {
+                        layer.seed = seed_value.parse::<u64>().unwrap();
+                        layers.0[index] = layer.clone();
+                    }
 
-// Renders the root node and the main panels
-fn ui(mut commands: Commands) {
-    commands.spawn((
-        Node {
-            width: percent(100),
-            flex_direction: FlexDirection::Row,
-            column_gap: px(20),
-            row_gap: px(20),
-            padding: UiRect::all(px(25)),
-            ..default()
-        },
-        children![
-            panel(
-                PanelProperties {
-                    title: "Layers".to_string(),
-                    width: 25,
-                },
-                (),
-                LayersPanel,
-            ),
-            panel(
-                PanelProperties {
-                    title: "Preview".to_string(),
-                    width: 75,
-                },
-                (),
-                PreviewPanel,
-            )
-        ],
-    ));
-}
-
-fn render_layers_panel(
-    mut commands: Commands,
-    layers: Res<ActiveLayers>,
-    selected: Option<Res<SelectedLayer>>,
-    panel: Single<Entity, With<LayersPanel>>,
-) {
-    commands.entity(*panel).despawn_children();
-    commands.entity(*panel).with_children(|parent| {
-        for (i, l) in layers.0.iter().enumerate() {
-            let active = if let Some(ref selected) = selected
-                && selected.0 == i
-            {
-                true
-            } else {
-                false
-            };
-            parent.spawn(layer(l.clone(), active)).observe(
-                move |_t: On<Pointer<Click>>, mut c: Commands| c.insert_resource(SelectedLayer(i)),
-            );
+                    // Layer type specific settings
+                    // TODO: refactor out all this duplicated code
+                    match &layer.settings {
+                        LayerSettings::Mountain(settings) => {
+                            let mut changing = settings.clone();
+                            let changed = mountain_settings(ui, &mut changing);
+                            if changed {
+                                layer.settings = LayerSettings::Mountain(changing);
+                                layers.0[index] = layer.clone();
+                            }
+                        }
+                        LayerSettings::Clamp(settings) => {
+                            let mut changing = settings.clone();
+                            let changed = clamp::clamp_settings(ui, &mut changing);
+                            if changed {
+                                layer.settings = LayerSettings::Clamp(changing);
+                                layers.0[index] = layer.clone();
+                            }
+                        }
+                        LayerSettings::SimpleErosion(settings) => {
+                            let mut changing = settings.clone();
+                            let changed = simple_erosion(ui, &mut changing);
+                            if changed {
+                                layer.settings = LayerSettings::SimpleErosion(changing);
+                                layers.0[index] = layer.clone();
+                            }
+                        }
+                        _ => (),
+                    }
+                });
+            });
         }
 
-        if let Some(selected) = selected {
-            parent.spawn((
-                Node {
-                    margin: UiRect::vertical(px(15)),
-                    border: UiRect::top(px(1)),
-                    padding: UiRect::horizontal(px(5)),
-                    ..default()
-                },
-                children![(
-                    Node::default(),
-                    Text::new("Settings"),
-                    TextFont::default().with_font_size(14.0),
-                )],
-            ));
-            parent.spawn(settings(layers.0[selected.0].clone()));
+        // Adding layers
+        let add_layer_button = egui::Button::new("Add Layer");
+        if ui.add(add_layer_button).clicked() {
+            commands.trigger(AddLayer);
         }
-    });
-}
-
-fn render_preview_panel(
-    mut commands: Commands,
-    image: Res<HMImageHandle>,
-    panel: Single<Entity, With<PreviewPanel>>,
-) {
-    if !image.is_changed() {
-        return;
-    }
-
-    commands.entity(*panel).despawn_children();
-    commands.entity(*panel).with_children(|parent| {
-        parent.spawn((
-            Node { ..default() },
-            ImageNode {
-                image: image.0.clone(),
-                ..default()
-            },
-        ));
     });
 }

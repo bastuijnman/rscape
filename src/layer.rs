@@ -1,25 +1,17 @@
+pub mod settings;
+
+use bevy::prelude::*;
 use strum_macros::{Display, EnumIter, EnumString};
+
+use crate::layer::settings::LayerSettings;
 
 #[derive(Clone, EnumString, EnumIter, Display)]
 pub enum LayerType {
     Hills,
     Water,
     Mountain,
-}
-
-#[derive(Clone)]
-pub enum LayerSettingField {
-    LayerType,
-}
-
-#[derive(Clone)]
-pub struct HillsSettings {
-    pub test: f64,
-}
-
-#[derive(Clone)]
-pub enum LayerSettings {
-    Hills(HillsSettings),
+    Clamp,
+    SimpleErosion,
 }
 
 #[derive(Clone)]
@@ -29,14 +21,22 @@ pub struct Layer {
     pub settings: LayerSettings,
 }
 
+#[derive(Event)]
+pub struct AddLayer;
+
 impl Layer {
     pub fn new(layer_type: LayerType, seed: u64) -> Self {
         Self {
-            layer_type,
+            layer_type: layer_type.clone(),
             seed,
-            settings: match layer_type {
-                _ => LayerSettings::Hills(HillsSettings { test: 1.0 }),
-            },
+            settings: LayerSettings::from_layer_type(layer_type),
+        }
+    }
+
+    pub fn is_blendable(&self) -> bool {
+        match self.layer_type {
+            LayerType::Clamp => false,
+            _ => true,
         }
     }
 }
