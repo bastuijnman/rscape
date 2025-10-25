@@ -1,7 +1,10 @@
 use std::f32::consts::PI;
 
-use bevy::{asset::RenderAssetUsages, prelude::*, render::render_resource::Extent3d};
-use bevy_egui::{EguiPlugin, EguiPrimaryContextPass};
+use bevy::{
+    asset::RenderAssetUsages, camera::visibility::RenderLayers, prelude::*,
+    render::render_resource::Extent3d,
+};
+use bevy_egui::{EguiGlobalSettings, EguiPlugin, EguiPrimaryContextPass, PrimaryEguiContext};
 use bevy_heightmap::HeightMap;
 
 use crate::{
@@ -41,7 +44,13 @@ fn on_add_layer(_: On<AddLayer>, mut layers: ResMut<ActiveLayers>) {
         .push(Layer::new(layer::LayerType::Hills, rand::random::<u64>()));
 }
 
-fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
+fn setup(
+    mut commands: Commands,
+    mut images: ResMut<Assets<Image>>,
+    mut egui_global_settings: ResMut<EguiGlobalSettings>,
+) {
+    egui_global_settings.auto_create_primary_context = false;
+
     commands.spawn((
         Camera3d::default(),
         Projection::Perspective(PerspectiveProjection {
@@ -61,6 +70,20 @@ fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
         },
         Transform::from_xyz(0.0, 0.0, 750.0)
             .with_rotation(Quat::from_axis_angle(Vec3::ONE, -PI / 6.)),
+    ));
+
+    // Egui camera
+    commands.spawn((
+        // The `PrimaryEguiContext` component requires everything needed to render a primary context.
+        PrimaryEguiContext,
+        Camera2d,
+        // Setting RenderLayers to none makes sure we won't render anything apart from the UI.
+        RenderLayers::none(),
+        Camera {
+            order: 1,
+            clear_color: ClearColorConfig::Custom(Color::NONE),
+            ..default()
+        },
     ));
 
     let image = Image::new(
